@@ -44,3 +44,22 @@ def signup(request: SignupRequest):
         return {"success": True, "user_id": response.user.id}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/login")
+def login(request: LoginRequest):
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": request.email,
+            "password": request.password
+        })
+        return {
+            "success": True,
+            "access_token": response.session.access_token,
+            "user_id": response.user.id
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
