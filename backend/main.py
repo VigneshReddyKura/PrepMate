@@ -1,6 +1,11 @@
 import os
 from dotenv import load_dotenv
 from supabase import create_client
+from pydantic import BaseModel
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
 
 load_dotenv()
 
@@ -28,3 +33,14 @@ def read_root():
 @app.get("/test-supabase")
 def test_supabase():
     return {"connected": True, "url": SUPABASE_URL}
+
+@app.post("/signup")
+def signup(request: SignupRequest):
+    try:
+        response = supabase.auth.sign_up({
+            "email": request.email,
+            "password": request.password
+        })
+        return {"success": True, "user_id": response.user.id}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
