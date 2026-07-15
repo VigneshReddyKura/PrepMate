@@ -41,7 +41,16 @@ def signup(request: SignupRequest):
             "email": request.email,
             "password": request.password
         })
-        return {"success": True, "user_id": response.user.id}
+
+        user_id = response.user.id
+
+        supabase.table("profiles").insert({
+            "id": user_id,
+            "full_name": None,
+            "target_role": None
+        }).execute()
+
+        return {"success": True, "user_id": user_id}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
