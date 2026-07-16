@@ -72,3 +72,21 @@ def login(request: LoginRequest):
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+from fastapi import UploadFile, File
+from pypdf import PdfReader
+import io
+
+@app.post("/upload-resume")
+async def upload_resume(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        pdf_reader = PdfReader(io.BytesIO(contents))
+
+        raw_text = ""
+        for page in pdf_reader.pages:
+            raw_text += page.extract_text()
+
+        return {"success": True, "raw_text": raw_text}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
