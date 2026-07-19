@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 from supabase import create_client
 from pydantic import BaseModel
@@ -13,6 +14,10 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+from google import genai
+
+gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -88,5 +93,45 @@ async def upload_resume(file: UploadFile = File(...)):
             raw_text += page.extract_text()
 
         return {"success": True, "raw_text": raw_text}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+@app.post("/parse-resume")
+async def parse_resume(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        pdf_reader = PdfReader(io.BytesIO(contents))
+        raw_text = ""
+        for page in pdf_reader.pages:
+            raw_text += page.extract_text()
+
+        prompt = f"""Extract structured information from this resume text.
+Return ONLY valid JSON, no other text, no markdown code fences, in exactly this format:
+{{
+  "name": "string or null",
+  "email": "string or null",
+  "skills": ["list", "of", "skills"],
+  "projects": [{{"title": "string", "description": "string"}}],
+  "experience": [{{"role": "string", "organization": "string", "description": "string"}}],
+  "education": [{{"degree": "string", "institution": "string"}}]
+}}
+
+Resume text:
+{raw_text}
+"""
+
+        response = gemini_client.models.generate_content(
+    model="gemini-3.5-flash",
+    contents=prompt
+)
+        response_text = response.text.strip()
+
+        if response_text.startswith("```"):
+            response_text = response_text.split("```")[1]
+            if response_text.startswith("json"):
+                response_text = response_text[4:]
+
+        parsed_data = json.loads(response_text.strip())
+
+        return {"success": True, "raw_text": raw_text, "parsed_data": parsed_data}
     except Exception as e:
         return {"success": False, "error": str(e)}
