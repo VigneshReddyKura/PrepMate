@@ -95,8 +95,21 @@ async def upload_resume(file: UploadFile = File(...)):
         return {"success": True, "raw_text": raw_text}
     except Exception as e:
         return {"success": False, "error": str(e)}
+from fastapi import Header, HTTPException
+
 @app.post("/parse-resume")
-async def parse_resume(file: UploadFile = File(...)):
+async def parse_resume(file: UploadFile = File(...), authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    token = authorization.replace("Bearer ", "")
+
+    try:
+        user_response = supabase.auth.get_user(token)
+        user_id = user_response.user.id
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
     try:
         contents = await file.read()
         pdf_reader = PdfReader(io.BytesIO(contents))
@@ -120,9 +133,9 @@ Resume text:
 """
 
         response = gemini_client.models.generate_content(
-    model="gemini-3.5-flash",
-    contents=prompt
-)
+            model="gemini-3.5-flash",
+            contents=prompt
+        )
         response_text = response.text.strip()
 
         if response_text.startswith("```"):
@@ -132,6 +145,17 @@ Resume text:
 
         parsed_data = json.loads(response_text.strip())
 
-        return {"success": True, "raw_text": raw_text, "parsed_data": parsed_data}
+        insert_response = supabase.table("resumes").insert({
+            "user_id": user_id,
+            "raw_text": raw_text,
+            "parsed_data": parsed_data
+        }).execute()
+
+        return {
+            "success": True,
+            "raw_text": raw_text,
+            "parsed_data": parsed_data,
+            "resume_id": insert_response.data[0]["id"]
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
